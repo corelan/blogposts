@@ -1,0 +1,7 @@
+﻿cl : Command line warning D9025: overriding '/sdl' with '/GS-'
+  corelanapp1.cpp
+c:\program files (x86)\microsoft visual studio\2017\wdexpress\vc\tools\msvc\14.16.27023\include\xlocale(319): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+  Generating code
+  All 13 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  corelanapp1.vcxproj -> C:\git\blogposts\debugging101\corelanapp1\Release\corelanapp1.exe
