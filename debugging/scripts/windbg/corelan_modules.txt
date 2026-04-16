@@ -1,0 +1,111 @@
+$$ corelan_modules.txt
+$$ Corelan Consulting bv
+$$ (c) 2026 - All rights reserved
+$$
+$$ Run with:
+$$   $><full/path/to/corelan_modules.txt
+
+.if (@$ptrsize == 8) {
+    .printf "Start             End               EntryPoint        ASLR   CFG    NXCOMPAT  OS     Path\n";
+    .printf "----------------  ----------------  ----------------  -----  -----  --------  -----  ---------------------------------------------\n";
+} .else {
+    .printf "Start     End       EntryPoint  ASLR   SAFESEH  CFG    NXCOMPAT  OS     Path\n";
+    .printf "--------  --------  ----------  -----  -------  -----  --------  -----  ---------------------------------------------\n";
+}
+
+r $t0 = @@c++((void*)(@$peb->Ldr))
+r $t1 = @@c++((void*)&((ntdll!_PEB_LDR_DATA*)@$t0)->InLoadOrderModuleList)
+r $t9 = @@c++(#FIELD_OFFSET(ntdll!_LDR_DATA_TABLE_ENTRY,InLoadOrderLinks))
+
+.for (r $t2 = poi(@$t1); @$t2 != @$t1; r $t2 = poi(@$t2)) {
+
+    r $t3  = @$t2 - @$t9
+    r $t4  = @@c++((void*)((ntdll!_LDR_DATA_TABLE_ENTRY*)@$t3)->DllBase)
+    r $t5  = @@c++((unsigned int)((ntdll!_LDR_DATA_TABLE_ENTRY*)@$t3)->SizeOfImage)
+    r $t6  = @@c++((void*)((ntdll!_LDR_DATA_TABLE_ENTRY*)@$t3)->FullDllName.Buffer)
+    r $t18 = @$t4 + @$t5 - 1
+
+    r $t7  = dwo(@$t4 + 0x3c)
+    r $t8  = @$t4 + @$t7 + 0x18
+    r $t10 = wo(@$t8)
+    r $t11 = @$t4 + dwo(@$t8 + 0x10)
+    r $t13 = wo(@$t8 + 0x46)
+
+    r $t15 = 0
+
+    .if (@$ptrsize == 4) {
+        .if (@$t10 == 0x10b) {
+
+            r $t16 = dwo(@$t8 + 0xb0)
+            r $t17 = dwo(@$t8 + 0xb4)
+
+            .if (@$t16 != 0) {
+                .if (@$t17 >= 0x48) {
+                    .if (@$t16 < @$t5) {
+                        .if ((@$t16 + 0x48) <= @$t5) {
+
+                            r $t19 = @$t4 + @$t16
+
+                            .if (dwo(@$t19 + 0x40) != 0) {
+                                .if (dwo(@$t19 + 0x44) != 0) {
+                                    r $t15 = 1
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    as /mu ${/v:modpath} @$t6
+    r $t16 = 0
+    .if ($spat("${modpath}", "c:\\windows*") != 0) {
+        r $t16 = 1
+    }
+
+    .if (@$ptrsize == 8) {
+        .printf "%p  %p  %p  ", @$t4, @$t18, @$t11
+    } .else {
+        .printf "%08x  %08x  %08x    ", @$t4, @$t18, @$t11
+    }
+
+    .if ((@$t13 & 0x0040) != 0) {
+        .printf "true "
+    } .else {
+        .printf /D "<b>false</b>"
+    }
+    .printf "  "
+
+    .if (@$ptrsize == 4) {
+        .if (@$t15 != 0) {
+            .printf "true   "
+        } .else {
+            .printf /D "<b>false</b>  "
+        }
+        .printf "  "
+    }
+
+    .if ((@$t13 & 0x4000) != 0) {
+        .printf "true "
+    } .else {
+        .printf /D "<b>false</b>"
+    }
+    .printf "  "
+
+    .if ((@$t13 & 0x0100) != 0) {
+        .printf "true    "
+    } .else {
+        .printf "false   "
+    }
+    .printf "  "
+
+    .if (@$t16 != 0) {
+        .printf "true "
+    } .else {
+        .printf "false"
+    }
+    .printf "  "
+
+    .printf "%mu\n", @$t6
+}

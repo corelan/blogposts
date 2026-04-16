@@ -1,0 +1,80 @@
+$$ corelan_heap_encoding.txt
+$$
+$$ Corelan Consulting bv
+$$ (c) 2026 - All rights reserved
+$$
+$$ Enumerate process heaps from the PEB
+$$ For each heap:
+$$   - detect NT heap vs Segment heap using Signature
+$$   - print heap address, type, and encoding key (for NT heap)
+$$
+$$ Note:
+$$   This script only walks PEB->ProcessHeaps.
+$$   !heap may show additional heaps that are not exposed there,
+$$   especially on modern systems / segment heaps.
+$$
+$$ Run with:
+$$   $><full/path/to/corelan_heap_encoding.txt
+
+.if (@$ptrsize == 8) {
+    .printf "Idx  HeapAddress         Type      EncEnabled   EncodeFlagMask      EncodingRaw\n"
+    .printf "---  ------------------  --------  -----------  ------------------  ----------------------------------\n"
+} .else {
+    .printf "Idx  HeapAddress  Type      EncEnabled   EncodeFlagMask  EncodingRaw\n"
+    .printf "---  -----------  --------  -----------  --------------  -------------------\n"
+}
+
+r $t0 = @@c++((void**)(@$peb->ProcessHeaps))
+r $t1 = @@c++((unsigned int)(@$peb->NumberOfHeaps))
+r $t9 = @@c++(sizeof(void*))
+
+.for (r $t2 = 0; @$t2 < @$t1; r $t2 = @$t2 + 1) {
+
+    $$ processHeaps[$t2]
+    r $t3 = poi(@$t0 + (@$t2 * @$t9))
+    r $t4 = @@c++(((ntdll!_HEAP*)@$t3)->Signature)
+
+    .if (@$t4 == 0xeeffeeff) {
+
+        r $t5 = @@c++(((ntdll!_HEAP*)@$t3)->EncodeFlagMask)
+        r $t6 = @@c++(&((ntdll!_HEAP*)@$t3)->Encoding)
+
+        .if (@$t5 != 0) {
+
+            .if (@$ptrsize == 8) {
+                .printf "%3d  %p  NT        yes          0x%08x          %p %p\n", @$t2, @$t3, @$t5, poi(@$t6), poi(@$t6+8)
+            } .else {
+                .printf "%3d  %08x     NT        yes          0x%08x      %08x %08x\n", @$t2, @$t3, @$t5, poi(@$t6), poi(@$t6+4)
+            }
+
+        } .else {
+
+            .if (@$ptrsize == 8) {
+                .printf "%3d  %p  NT        no           0x%08x          %p %p\n", @$t2, @$t3, @$t5, poi(@$t6), poi(@$t6+8)
+            } .else {
+                .printf "%3d  %08x     NT        no           0x%08x      %08x %08x\n", @$t2, @$t3, @$t5, poi(@$t6), poi(@$t6+4)
+            }
+        }
+
+    } .else {
+
+        r $t7 = @@c++(((ntdll!_SEGMENT_HEAP*)@$t3)->Signature)
+
+        .if (@$t7 == 0xddeeddee) {
+
+            .if (@$ptrsize == 8) {
+                .printf "%3d  %p  Segment   n/a          n/a               n/a\n", @$t2, @$t3
+            } .else {
+                .printf "%3d  %08x   Segment   n/a          n/a             n/a\n", @$t2, @$t3
+            }
+
+        } .else {
+
+            .if (@$ptrsize == 8) {
+                .printf "%3d  %p  Unknown   n/a          n/a               NTsig=%08x Segsig=%08x\n", @$t2, @$t3, @$t4, @$t7
+            } .else {
+                .printf "%3d  %08x   Unknown   n/a          n/a             NTsig=%08x Segsig=%08x\n", @$t2, @$t3, @$t4, @$t7
+            }
+        }
+    }
+}

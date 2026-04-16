@@ -1,0 +1,109 @@
+$$ corelan_heap_seg_va.txt
+$$
+$$ Corelan Consulting bv
+$$ (c) 2026 - All rights reserved
+$$
+$$ Get NT Heap segments and VirtualAllocdBlocks
+$$
+$$ Run with:
+$$   $><full/path/to/corelan_heap_seg_va.txt
+
+r $t0  = @@c++((void**)(@$peb->ProcessHeaps))
+r $t1  = @@c++((unsigned int)(@$peb->NumberOfHeaps))
+r $t2  = @@c++(sizeof(void*))
+
+$$ _HEAP_SEGMENT->SegmentListEntry offset
+r $t8  = @@c++((char*)&((ntdll!_HEAP_SEGMENT*)0)->SegmentListEntry - (char*)0)
+
+$$ pointer size
+r $t18 = @@c++(sizeof(void*))
+
+$$ VA block raw offsets
+$$ x86 : CommitSize=+0x10, ReserveSize=+0x14
+$$ x64 : CommitSize=+0x20, ReserveSize=+0x28
+.if (@$t18 == 4) {
+    r $t16 = 0x10
+    r $t17 = 0x14
+} .else {
+    r $t16 = 0x20
+    r $t17 = 0x28
+}
+
+.printf "Enumerating NT heaps, segments, and VirtualAllocdBlocks\n\n"
+.printf "Number of heaps: %d\n", @$t1
+
+.for (r $t3 = 0; @$t3 < @$t1; r $t3 = @$t3 + 1) {
+
+    r $t4 = poi(@$t0 + (@$t3 * @$t2))
+    r $t5 = @@c++(((ntdll!_HEAP*)@$t4)->Signature)
+
+    .if (@$t5 == 0xeeffeeff) {
+
+        .printf "============================================================\n"
+        .printf "Heap[%d] : %p (NT heap)\n", @$t3, @$t4
+
+        $$ ---------------------------------------------------------
+        $$ Segments
+        $$ ---------------------------------------------------------
+        r $t6 = @@c++(&((ntdll!_HEAP*)@$t4)->SegmentList)
+        r $t7 = 0
+
+        .for (r $t10 = poi(@$t6); @$t10 != @$t6; r $t10 = poi(@$t10)) {
+            r $t7 = @$t7 + 1
+        }
+
+        .printf "  Segments           : %d\n", @$t7
+
+        .if (@$t7 != 0) {
+            .for (r $t10 = poi(@$t6); @$t10 != @$t6; r $t10 = poi(@$t10)) {
+
+                r $t11 = @$t10 - @$t8
+                r $t12 = @@c++(((ntdll!_HEAP_SEGMENT*)@$t11)->BaseAddress)
+                r $t13 = @@c++(((ntdll!_HEAP_SEGMENT*)@$t11)->NumberOfPages)
+                r $t14 = @$t12 + (@$t13 * 0x1000)
+
+                .printf "    Segment: %p  [%p - %p]  pages: %x\n", @$t11, @$t12, @$t14, @$t13
+            }
+        }
+
+        $$ ---------------------------------------------------------
+        $$ VirtualAllocdBlocks
+        $$ NOTE:
+        $$ We do NOT depend on _HEAP_VIRTUAL_ALLOC_ENTRY symbols here.
+        $$ The LIST_ENTRY is assumed to be at offset 0 of the VA block.
+        $$ CommitSize / ReserveSize are read directly from memory.
+        $$ ---------------------------------------------------------
+        r $t6 = @@c++(&((ntdll!_HEAP*)@$t4)->VirtualAllocdBlocks)
+        r $t7 = 0
+
+        .for (r $t10 = poi(@$t6); @$t10 != @$t6; r $t10 = poi(@$t10)) {
+            r $t7 = @$t7 + 1
+        }
+
+        .printf "  VirtualAllocdBlocks: %d\n", @$t7
+
+        .if (@$t7 != 0) {
+            .for (r $t10 = poi(@$t6); @$t10 != @$t6; r $t10 = poi(@$t10)) {
+
+                $$ current list entry is the start of the VA block
+                r $t11 = @$t10
+
+                $$ read CommitSize / ReserveSize directly
+                r $t12 = poi(@$t11 + @$t16)
+                r $t13 = poi(@$t11 + @$t17)
+
+                $$ end addresses
+                r $t14 = @$t11 + @$t12
+                r $t15 = @$t11 + @$t13
+
+                .if (@$t12 != @$t13) {
+                    .printf /D "    VA: %p  Commit [%p - %p] (<b><col fg=\"red\">%p</col></b>)  Reserve [%p - %p] (<b><col fg=\"red\">%p</col></b>)\n", @$t11, @$t11, @$t14, @$t12, @$t11, @$t15, @$t13
+                } .else {
+                    .printf "    VA: %p  Commit [%p - %p] (%p)  Reserve [%p - %p] (%p)\n", @$t11, @$t11, @$t14, @$t12, @$t11, @$t15, @$t13
+                }
+            }
+        }
+
+        .printf "\n"
+    }
+}
